@@ -1,0 +1,66 @@
+@* The asset as a picture element (SPEC.md 7.2): the browser picks the format, density and color scheme,
+   and follows dark mode live. Animations show their still. Unmatched attributes, such as class, go on the img. *@
+@namespace Brua.Web
+@inject IServiceProvider Services
+
+@if (_model is { } model)
+{
+    <picture>
+        @foreach (var source in model.Sources)
+        {
+            <source type="@source.Type" media="@source.Media" srcset="@source.Srcset" sizes="@source.Sizes" />
+        }
+        <img @attributes="AdditionalAttributes" src="@model.Img.Src" srcset="@model.Img.Srcset" sizes="@model.Img.Sizes"
+             width="@model.Img.Width" height="@model.Img.Height" alt="@model.Img.Alt" lang="@model.Img.Lang"
+             loading="@model.Img.Loading" decoding="@model.Img.Decoding" />
+    </picture>
+}
+
+@code {
+    private PictureModel? _model;
+    private string? _loadedId;
+    private AssetResponse? _loaded;
+
+    /// <summary>The asset as your backend embedded it: a snapshot of one release.</summary>
+    [Parameter] public AssetResponse? Asset { get; set; }
+
+    /// <summary>
+    /// Or the asset's id: its current release is read from the edge through the app's <see cref="BruaClient"/>
+    /// (<c>services.AddBrua(...)</c>), so a merge reaches this picture within a minute with no backend involved.
+    /// Nothing renders until it has loaded, or when nothing is released under the id.
+    /// </summary>
+    [Parameter] public string? Id { get; set; }
+
+    /// <summary>The sizes attribute for flexible assets; defaults to the asset's width in CSS pixels.</summary>
+    [Parameter] public string? Sizes { get; set; }
+
+    /// <summary>The img's loading attribute: "lazy" (the default) or "eager".</summary>
+    [Parameter] public string Loading { get; set; } = "lazy";
+
+    /// <summary>
+    /// "light" or "dark" to show that scheme's files only, for apps that switch themes themselves. Left out,
+    /// the browser follows the system setting.
+    /// </summary>
+    [Parameter] public string? ColorScheme { get; set; }
+
+    /// <summary>Anything else, such as class, style or data attributes, goes on the img.</summary>
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var asset = Asset;
+        if (asset is null && Id is { } id)
+        {
+            if (id != _loadedId)
+            {
+                _loaded = await Client.GetAsync(id);
+                _loadedId = id;
+            }
+            asset = _loaded;
+        }
+        _model = asset is null ? null : Picture.Model(asset, new PictureOptions(Sizes, Loading, ColorScheme: ColorScheme));
+    }
+
+    private BruaClient Client => Services.GetService(typeof(BruaClient)) as BruaClient
+        ?? throw new InvalidOperationException("BruaPicture with an Id needs the app's BruaClient: add services.AddBrua(new BruaOptions(\"https://…/assets/{org}\")).");
+}

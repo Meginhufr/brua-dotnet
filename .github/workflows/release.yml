@@ -1,0 +1,27 @@
+name: Release
+
+# A tag vX.Y.Z publishes Brua.Web at that version. NuGet trusts this workflow through GitHub's OIDC identity
+# (a trusted publishing policy on nuget.org, PUBLISHING.md in the main repository), so no API key is stored.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test Brua.Web.Tests
+      - run: dotnet pack Brua.Web -c Release -p:Version="${GITHUB_REF_NAME#v}" -o packages
+      - uses: NuGet/login@v1
+        id: nuget
+        with:
+          user: ${{ vars.NUGET_USER }}
+      - run: dotnet nuget push packages/*.nupkg --api-key "${{ steps.nuget.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json
