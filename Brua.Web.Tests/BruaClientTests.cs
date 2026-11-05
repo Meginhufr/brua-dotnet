@@ -186,6 +186,44 @@ public class BruaClientTests
         edge.Requests.Should().Equal($"{Base}/icon.json?lang=en");
     }
 
+    private static async Task<string> RenderIdAsync(Edge edge, string id, bool withFailure)
+    {
+        await using var services = new ServiceCollection().AddLogging()
+            .AddSingleton(new BruaClient(new HttpClient(edge), new BruaOptions(Base, Lang: "en")))
+            .BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+        return await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var parameters = new Dictionary<string, object?>
+            {
+                [nameof(BruaPicture.Id)] = id,
+                [nameof(BruaPicture.Placeholder)] = (RenderFragment)(b => b.AddMarkupContent(0, "<i>loading</i>")),
+            };
+            if (withFailure)
+                parameters[nameof(BruaPicture.Failure)] = (RenderFragment<BruaImageError>)(error => b => b.AddMarkupContent(0, error switch
+                {
+                    BruaImageError.NotReleased => "<b>not released</b>",
+                    BruaImageError.Unreachable => "<b>unreachable</b>",
+                    BruaImageError.File f => $"<b>file {f.Url}</b>",
+                    _ => "",
+                }));
+            return (await renderer.RenderComponentAsync<BruaPicture>(ParameterView.FromDictionary(parameters))).ToHtmlString();
+        });
+    }
+
+    [Fact]
+    public async Task An_id_with_nothing_released_renders_the_failure_with_its_reason_or_else_the_placeholder()
+    {
+        (await RenderIdAsync(new Edge(), "nothing-released", withFailure: true)).Should().Be("<b>not released</b>");
+        (await RenderIdAsync(new Edge(), "nothing-released", withFailure: false)).Should().Be("<i>loading</i>");
+    }
+
+    [Fact]
+    public async Task An_edge_that_cant_be_reached_renders_the_failure_as_unreachable()
+    {
+        (await RenderIdAsync(new Edge { Down = true }, "icon", withFailure: true)).Should().Be("<b>unreachable</b>");
+    }
+
     [Fact]
     public async Task Without_a_registered_client_an_id_is_a_configuration_error()
     {

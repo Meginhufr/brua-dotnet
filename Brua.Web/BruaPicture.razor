@@ -1,9 +1,14 @@
 @* The asset as a picture element (SPEC.md 7.2): the browser picks the format, density and color scheme,
-   and follows dark mode live. Animations show their still. Unmatched attributes, such as class, go on the img. *@
+   and follows dark mode live. Animations show their still. Unmatched attributes, such as class, go on the img.
+   Placeholder shows until an id has loaded, and Failure, with the reason, when there is no picture. *@
 @namespace Brua.Web
 @inject IServiceProvider Services
 
-@if (_model is { } model)
+@if (_error is { } error)
+{
+    @(Failure is { } failure ? failure(error) : Placeholder)
+}
+else if (_model is { } model)
 {
     <picture>
         @foreach (var source in model.Sources)
@@ -13,14 +18,20 @@
         @* The fill before the splat, so a style the page gives the component still wins. *@
         <img style="@model.Img.Style" @attributes="AdditionalAttributes" src="@model.Img.Src" srcset="@model.Img.Srcset" sizes="@model.Img.Sizes"
              width="@model.Img.Width" height="@model.Img.Height" alt="@model.Img.Alt" lang="@model.Img.Lang"
-             loading="@model.Img.Loading" decoding="@model.Img.Decoding" />
+             loading="@model.Img.Loading" decoding="@model.Img.Decoding" @onerror="() => FileFailed(model.Img.Src)" />
     </picture>
+}
+else
+{
+    @Placeholder
 }
 
 @code {
     private PictureModel? _model;
     private string? _loadedId;
     private AssetResponse? _loaded;
+    private BruaImageError? _error;
+    private string? _failedSrc;
 
     /// <summary>The asset as your backend embedded it: a snapshot of one release.</summary>
     [Parameter] public AssetResponse? Asset { get; set; }
@@ -28,7 +39,7 @@
     /// <summary>
     /// Or the asset's id: its current release is read from the edge through the app's <see cref="BruaClient"/>
     /// (<c>services.AddBrua(...)</c>), so a merge reaches this picture within a minute with no backend involved.
-    /// Nothing renders until it has loaded, or when nothing is released under the id.
+    /// <see cref="Placeholder"/> renders until it has loaded.
     /// </summary>
     [Parameter] public string? Id { get; set; }
 
@@ -50,6 +61,15 @@
     /// <summary>Where the img sits in its box, as "x% y%", instead of the asset's position.</summary>
     [Parameter] public string? ObjectPosition { get; set; }
 
+    /// <summary>What renders until an id has loaded, and on failure when no <see cref="Failure"/> is given.</summary>
+    [Parameter] public RenderFragment? Placeholder { get; set; }
+
+    /// <summary>
+    /// What renders when there is no picture, given the reason: nothing released, the edge unreachable, or the file
+    /// failed in the browser (interactive render modes only; a static page can't hear the img's error).
+    /// </summary>
+    [Parameter] public RenderFragment<BruaImageError>? Failure { get; set; }
+
     /// <summary>Anything else, such as class, style or data attributes, goes on the img.</summary>
     [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 
@@ -65,13 +85,33 @@
                 _loadedId = id;
             }
             Build(_loaded);
-            _loaded = await Client.GetAsync(id);
+            // The client keeps the last known release when the edge can't be reached, so a throw means none is known.
+            try
+            {
+                _loaded = await Client.GetAsync(id);
+                _error = _loaded is null ? new BruaImageError.NotReleased() : null;
+            }
+            catch (HttpRequestException e)
+            {
+                _error = new BruaImageError.Unreachable(e);
+            }
         }
+        else _error = null;
         Build(Asset ?? _loaded);
     }
 
-    private void Build(AssetResponse? asset) =>
+    private void Build(AssetResponse? asset)
+    {
         _model = asset is null ? null : Picture.Model(asset, new PictureOptions(Sizes, Loading, ColorScheme: ColorScheme, ObjectFit: ObjectFit, ObjectPosition: ObjectPosition));
+        // Another file (a merge, another size) gets its chance; the one that failed stays failed.
+        if (_model is { } model && _failedSrc == model.Img.Src) _error = new BruaImageError.File(model.Img.Src);
+    }
+
+    private void FileFailed(string src)
+    {
+        _failedSrc = src;
+        _error = new BruaImageError.File(src);
+    }
 
     private BruaClient Client => Services.GetService(typeof(BruaClient)) as BruaClient
         ?? throw new InvalidOperationException("BruaPicture with an Id needs the app's BruaClient: add services.AddBrua(new BruaOptions(\"https://…/assets/{org}\")).");
