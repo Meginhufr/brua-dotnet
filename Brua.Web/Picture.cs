@@ -11,7 +11,13 @@ namespace Brua.Web;
 /// "light" or "dark" to render that scheme's files only, for apps that switch themes themselves. Left out,
 /// the dark files go behind a media query and the browser follows the system setting.
 /// </param>
-public sealed record PictureOptions(string? Sizes = null, string Loading = "lazy", string? Class = null, string? ColorScheme = null);
+/// <param name="ObjectFit">
+/// "contain" or "cover" to override the asset's fit, or "none" to leave the fit and the position to the page's CSS.
+/// Left out, the asset's fit is used.
+/// </param>
+/// <param name="ObjectPosition">Where the img sits in its box, as "x% y%"; left out, the asset's position.</param>
+public sealed record PictureOptions(string? Sizes = null, string Loading = "lazy", string? Class = null, string? ColorScheme = null,
+    string? ObjectFit = null, string? ObjectPosition = null);
 
 /// <summary>A source of the picture: one format, optionally one color scheme.</summary>
 /// <param name="Type">The media type of the files in <paramref name="Srcset"/>.</param>
@@ -30,6 +36,7 @@ public sealed record PictureSource(string Type, string? Media, string Srcset, st
 /// <param name="Lang">The alt text's language, when it differs from the page's.</param>
 /// <param name="Loading">The loading attribute.</param>
 /// <param name="Class">The class attribute, if any.</param>
+/// <param name="Style">The object-fit and object-position the img is drawn with, when the asset or the call site gives a fill.</param>
 public sealed record PictureImage(
     string Src,
     string? Srcset,
@@ -39,7 +46,8 @@ public sealed record PictureImage(
     string Alt,
     string? Lang,
     string Loading,
-    string? Class)
+    string? Class,
+    string? Style = null)
 {
     /// <summary>Images decode off the main thread.</summary>
     public string Decoding => "async";
@@ -111,7 +119,19 @@ public static class Picture
             asset.Alt,
             asset.Lang,
             options.Loading,
-            options.Class));
+            options.Class,
+            Fill(asset, options)));
+    }
+
+    /// <summary>
+    /// The fill to put on the img: the call site's or the asset's, cleaned to what CSS takes. A response from before
+    /// the fill, with no override either, gets none, so the page draws it as it always has.
+    /// </summary>
+    private static string? Fill(AssetResponse asset, PictureOptions options)
+    {
+        if (options.ObjectFit == "none") return null;
+        if (asset.ObjectFit is null && asset.ObjectPosition is null && options.ObjectFit is null && options.ObjectPosition is null) return null;
+        return Sizing.Style(Sizing.ObjectFitOf(asset, options.ObjectFit), Sizing.ObjectPositionOf(asset, options.ObjectPosition));
     }
 
     /// <summary>The picture as HTML, for Razor Pages, MVC views and emails rendered on the server.</summary>
@@ -124,7 +144,7 @@ public static class Picture
         html.Append(Tag("img",
             ("src", img.Src), ("srcset", img.Srcset), ("sizes", img.Sizes),
             ("width", img.Width.ToString()), ("height", img.Height.ToString()),
-            ("alt", img.Alt), ("lang", img.Lang), ("loading", img.Loading), ("decoding", img.Decoding), ("class", img.Class)));
+            ("alt", img.Alt), ("lang", img.Lang), ("loading", img.Loading), ("decoding", img.Decoding), ("class", img.Class), ("style", img.Style)));
         return html.Append("</picture>").ToString();
     }
 

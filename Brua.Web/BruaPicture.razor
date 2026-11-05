@@ -10,7 +10,8 @@
         {
             <source type="@source.Type" media="@source.Media" srcset="@source.Srcset" sizes="@source.Sizes" />
         }
-        <img @attributes="AdditionalAttributes" src="@model.Img.Src" srcset="@model.Img.Srcset" sizes="@model.Img.Sizes"
+        @* The fill before the splat, so a style the page gives the component still wins. *@
+        <img style="@model.Img.Style" @attributes="AdditionalAttributes" src="@model.Img.Src" srcset="@model.Img.Srcset" sizes="@model.Img.Sizes"
              width="@model.Img.Width" height="@model.Img.Height" alt="@model.Img.Alt" lang="@model.Img.Lang"
              loading="@model.Img.Loading" decoding="@model.Img.Decoding" />
     </picture>
@@ -43,6 +44,12 @@
     /// </summary>
     [Parameter] public string? ColorScheme { get; set; }
 
+    /// <summary>"contain" or "cover" to override the asset's fit, or "none" to leave the fit to the page's CSS.</summary>
+    [Parameter] public string? ObjectFit { get; set; }
+
+    /// <summary>Where the img sits in its box, as "x% y%", instead of the asset's position.</summary>
+    [Parameter] public string? ObjectPosition { get; set; }
+
     /// <summary>Anything else, such as class, style or data attributes, goes on the img.</summary>
     [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 
@@ -64,7 +71,7 @@
     }
 
     private void Build(AssetResponse? asset) =>
-        _model = asset is null ? null : Picture.Model(asset, new PictureOptions(Sizes, Loading, ColorScheme: ColorScheme));
+        _model = asset is null ? null : Picture.Model(asset, new PictureOptions(Sizes, Loading, ColorScheme: ColorScheme, ObjectFit: ObjectFit, ObjectPosition: ObjectPosition));
 
     private BruaClient Client => Services.GetService(typeof(BruaClient)) as BruaClient
         ?? throw new InvalidOperationException("BruaPicture with an Id needs the app's BruaClient: add services.AddBrua(new BruaOptions(\"https://…/assets/{org}\")).");

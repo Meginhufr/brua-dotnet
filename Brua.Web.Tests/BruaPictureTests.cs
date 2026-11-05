@@ -27,6 +27,19 @@ public class BruaPictureTests
     }
 
     [Fact]
+    public async Task The_img_draws_with_the_assets_fill_and_a_style_the_page_gives_wins()
+    {
+        var filled = Sample.Photo with { ObjectFit = "cover", ObjectPosition = "50% 35%" };
+
+        (await Render(new Dictionary<string, object?> { [nameof(BruaPicture.Asset)] = filled }))
+            .Should().Contain("style=\"object-fit: cover; object-position: 50% 35%\"");
+        (await Render(new Dictionary<string, object?> { [nameof(BruaPicture.Asset)] = filled, [nameof(BruaPicture.ObjectPosition)] = "10% 20%" }))
+            .Should().Contain("object-position: 10% 20%");
+        (await Render(new Dictionary<string, object?> { [nameof(BruaPicture.Asset)] = filled, ["style"] = "width: 100%" }))
+            .Should().Contain("style=\"width: 100%\"").And.NotContain("object-fit");
+    }
+
+    [Fact]
     public async Task Sizes_and_loading_are_parameters()
     {
         var html = await Render(new Dictionary<string, object?>

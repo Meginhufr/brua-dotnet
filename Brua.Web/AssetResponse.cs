@@ -12,6 +12,8 @@ namespace Brua.Web;
 /// <param name="Alt">The alt text in the resolved language; empty for a decorative asset.</param>
 /// <param name="Lang">The alt text's language, when the asset has one.</param>
 /// <param name="Variants">Every file of the version, each with the conditions it is for.</param>
+/// <param name="ObjectFit">How a layout's box of another shape holds the asset, as CSS object-fit: "contain" or "cover".</param>
+/// <param name="ObjectPosition">Where it sits in the box, as CSS object-position: "50% 35%", the point a cover crop keeps in view.</param>
 public sealed record AssetResponse(
     string Id,
     int Version,
@@ -20,7 +22,9 @@ public sealed record AssetResponse(
     int Height,
     string Alt,
     string? Lang,
-    IReadOnlyList<AssetVariant> Variants);
+    IReadOnlyList<AssetVariant> Variants,
+    string? ObjectFit = null,
+    string? ObjectPosition = null);
 
 /// <summary>Value fields are plain strings, not enums, so new values from the API never break decoding (SPEC.md 14).</summary>
 /// <param name="Type">The media type of the file.</param>
