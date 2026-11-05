@@ -14,7 +14,7 @@ Your backend passes asset ids on, and the app reads each asset's current release
 builder.Services.AddBrua(new BruaOptions("https://cdn.brua.dev/assets/<your organization id>", Lang: "nb"));
 ```
 
-`BruaClient.GetAsync(id)` fetches `{base}/{id}.json` and reuses it for a minute, the edge's own lifetime, so a page with a hundred references makes one request per asset and a merge in Brua reaches the page within the minute with no deploy of yours. It returns null when nothing is released under the id.
+`BruaClient.GetAsync(id)` reads `{base}/{id}.json` and remembers every release it has read: from memory for the edge's minute, so a page with a hundred references makes one request per asset, read again after that, and kept when the edge can't be reached. A merge in Brua reaches the page within the minute with no deploy of yours. It returns null when nothing is released under the id; `CachedAsset(id)` gives the last release read at once, and `PrefetchAsync(ids)` reads a page's ids together. Without `Lang`, the current UI culture picks the language: the request's under ASP.NET localization, the browser's in WebAssembly.
 
 ## Or embedded by your backend
 
